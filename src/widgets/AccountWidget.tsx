@@ -72,9 +72,12 @@ function BudgetPeriodChart({ data }: { data: BudgetPeriod }) {
   )
 }
 
+interface CatBudgetItem { category: string; amount: number }
 interface Budget {
   salary: number; savings: number; savings_is_exc: boolean
-  fixed_charges: number; provisionals: number; libre: number
+  fixed_charges: number; provisionals: number
+  category_budgets: number; category_budget_items: CatBudgetItem[]
+  libre: number
 }
 interface Summary {
   balance: number; savings_balance: number; usable_balance: number
@@ -108,9 +111,10 @@ const WALLET_STYLES: Record<string, { bg: string; color: string; icon: ReactElem
   cash:         { bg: 'rgba(253,230,138,0.18)', color: '#fcd34d', icon: <IconCash /> },
 }
 
-export default function AccountWidget({ onDataLoaded, onWalletClick, refreshKey }: {
+export default function AccountWidget({ onDataLoaded, onWalletClick, onTransferClick, refreshKey }: {
   onDataLoaded?: (wallets: WalletItem[]) => void
   onWalletClick?: (wallet: WalletItem) => void
+  onTransferClick?: () => void
   refreshKey?: number
 }) {
   const [data, setData] = useState<Summary | null>(null)
@@ -240,6 +244,25 @@ export default function AccountWidget({ onDataLoaded, onWalletClick, refreshKey 
         )}
 
         <div style={css.divider} />
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <span style={{ fontSize: 10, letterSpacing: '1.2px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.22)' }}>Portefeuilles</span>
+          {onTransferClick && (
+            <button onClick={onTransferClick} style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              background: 'rgba(147,197,253,0.08)', border: '1px solid rgba(147,197,253,0.2)',
+              borderRadius: 8, padding: '4px 10px', cursor: 'pointer', color: '#93c5fd',
+              fontSize: 10, fontWeight: 600, letterSpacing: '0.3px',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
+            }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <line x1="5" y1="12" x2="19" y2="12"/>
+                <polyline points="12 5 19 12 12 19"/>
+              </svg>
+              Transfert
+            </button>
+          )}
+        </div>
 
         <div style={css.walletList}>
           {data.wallets?.map(w => {

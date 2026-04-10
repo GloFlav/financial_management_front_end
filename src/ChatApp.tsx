@@ -136,7 +136,7 @@ function Bubble({ msg, onConfirm, onDownload }: {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 10, color: isUser ? '#6ee7b7' : '#a78bfa', fontWeight: 700,
       }}>
-        {isUser ? 'G' : 'Z'}
+        {isUser ? 'G' : 'ZK'}
       </div>
 
       {/* Bubble */}
@@ -215,6 +215,14 @@ export default function ChatApp() {
     }
     setMessages([])
     historyRef.current = []
+  }
+
+  const handleClearAll = () => {
+    localStorage.removeItem(HISTORY_KEY)
+    setMessages([])
+    setConversations([])
+    historyRef.current = []
+    setShowHistory(false)
   }
 
   // ── webkit bridge helper ─────────────────────────────────────────
@@ -467,7 +475,7 @@ export default function ChatApp() {
       } as CSSProperties}>
         <div style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', letterSpacing: '-0.2px' }}>
-            Zoky
+            Zoky kiontabla
           </div>
           <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 1 }}>
             gestionnaire de compte
@@ -495,6 +503,26 @@ export default function ChatApp() {
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/>
+            </svg>
+          </button>
+          {/* Clear all button */}
+          <button
+            onClick={handleClearAll}
+            title="Effacer tout l'historique"
+            style={{
+              width: 24, height: 24, borderRadius: 7, cursor: 'pointer',
+              background: 'rgba(252,165,165,0.07)', border: '1px solid rgba(252,165,165,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'rgba(252,165,165,0.45)',
+              WebkitAppRegion: 'no-drag',
+            } as CSSProperties}
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+              <path d="M10 11v6M14 11v6"/>
+              <path d="M9 6V4h6v2"/>
             </svg>
           </button>
           {/* Reload button */}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import type { WalletItem } from '../types'
+import BudgetWidget from './BudgetWidget'
 
 interface FixedCharge {
   id: number; name: string; amount: number; wallet_id: number; wallet_name: string
@@ -9,6 +10,10 @@ interface FixedCharge {
 interface ProvisionalExpense {
   id: number; description: string; amount: number; wallet_id: number; wallet_name: string
   month: string; category: string
+}
+interface CategoryBudget {
+  category: string; default_amount: number; override_amount: number | null
+  override_month: number | null; effective_limit: number; spent: number; ratio: number
 }
 
 const API = import.meta.env.VITE_API_URL
@@ -138,7 +143,7 @@ function ProvForm({ wallets, initial, onSave, onCancel }: {
 /* ── Composant principal ── */
 export default function FixedChargesSection({ wallets, refreshKey }: { wallets: WalletItem[]; refreshKey?: number }) {
   const [open, setOpen]     = useState(false)
-  const [tab, setTab]       = useState<'charges' | 'prevision'>('charges')
+  const [tab, setTab]       = useState<'charges' | 'prevision' | 'budgets'>('charges')
   const [selMonth, setSelMonth] = useState(thisMonth)
 
   // Charges fixes
@@ -151,15 +156,20 @@ export default function FixedChargesSection({ wallets, refreshKey }: { wallets: 
   const [editingProv, setEditingProv] = useState<ProvisionalExpense | null>(null)
   const [addingProv, setAddingProv] = useState(false)
 
+  // Budgets catégorie
+  const [catBudgets, setCatBudgets] = useState<CategoryBudget[]>([])
+
   const loadCharges = () =>
     fetch(`${API}/finance/fixed-charges`).then(r => r.json()).then(setCharges).catch(() => {})
   const loadProv = () =>
     fetch(`${API}/finance/provisional-expenses?month=${selMonth}`)
       .then(r => r.json()).then(setProvisionals).catch(() => {})
+  const loadBudgets = () =>
+    fetch(`${API}/finance/category-budgets`).then(r => r.json()).then(setCatBudgets).catch(() => {})
 
-  useEffect(() => { if (open) loadCharges() }, [open])
+  useEffect(() => { if (open) { loadCharges(); loadBudgets() } }, [open])
   useEffect(() => { if (open) loadProv() }, [open, selMonth])
-  useEffect(() => { if (refreshKey !== undefined) { loadCharges(); loadProv() } }, [refreshKey])
+  useEffect(() => { if (refreshKey !== undefined) { loadCharges(); loadProv(); loadBudgets() } }, [refreshKey])
 
   /* Charges fixes CRUD */
   const saveCharge = async (v: { name: string; amount: string; wallet_id: string; day: string; category: string }, id?: number) => {
@@ -204,6 +214,7 @@ export default function FixedChargesSection({ wallets, refreshKey }: { wallets: 
 
   const totalCharges = charges.reduce((s, c) => s + c.amount, 0)
   const totalProv    = provisionals.reduce((s, p) => s + p.amount, 0)
+  const totalBudgets = catBudgets.reduce((s, b) => s + b.effective_limit, 0)
 
   return (
     <div style={{
@@ -229,6 +240,22 @@ export default function FixedChargesSection({ wallets, refreshKey }: { wallets: 
               {fmt(totalCharges)}/mois
             </span>
           )}
+          {totalProv > 0 && (
+            <span style={{
+              fontSize: 10, color: 'rgba(253,211,77,0.85)', background: 'rgba(253,211,77,0.08)',
+              border: '1px solid rgba(253,211,77,0.2)', borderRadius: 6, padding: '1px 7px',
+            }}>
+              +{fmt(totalProv)} prév.
+            </span>
+          )}
+          {totalBudgets > 0 && (
+            <span style={{
+              fontSize: 10, color: 'rgba(251,146,60,0.85)', background: 'rgba(251,146,60,0.08)',
+              border: '1px solid rgba(251,146,60,0.2)', borderRadius: 6, padding: '1px 7px',
+            }}>
+              +{fmt(totalBudgets)} budget
+            </span>
+          )}
         </div>
         <ChevronIcon open={open} />
       </button>
@@ -242,7 +269,7 @@ export default function FixedChargesSection({ wallets, refreshKey }: { wallets: 
 
           {/* Onglets */}
           <div style={{ display: 'flex', background: 'rgba(255,255,255,0.04)', borderRadius: 11, padding: 3, marginBottom: 14, gap: 3 }}>
-            {([['charges', 'Charges fixes'], ['prevision', 'Prévisionnelles']] as const).map(([t, label]) => (
+            {([['charges', 'Charges'], ['prevision', 'Prévis.'], ['budgets', 'Budgets']] as const).map(([t, label]) => (
               <button key={t} onClick={() => setTab(t)} style={{
                 flex: 1, padding: '7px 0', borderRadius: 9, cursor: 'pointer',
                 background: tab === t ? 'rgba(255,255,255,0.09)' : 'transparent',
@@ -373,6 +400,11 @@ export default function FixedChargesSection({ wallets, refreshKey }: { wallets: 
                 </button>
               )}
             </>
+          )}
+
+          {/* ── Budgets catégorie ── */}
+          {tab === 'budgets' && (
+            <BudgetWidget refreshKey={refreshKey} />
           )}
         </div>
       </div>

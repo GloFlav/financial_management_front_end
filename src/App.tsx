@@ -4,8 +4,10 @@ import AccountWidget from './widgets/AccountWidget'
 import FixedChargesSection from './widgets/FixedChargesSection'
 import TrendChart from './widgets/TrendChart'
 import WalletModal from './widgets/WalletModal'
+import TransferModal from './widgets/TransferModal'
 import HistoryModal from './widgets/HistoryModal'
 import VoiceConfirmModal from './widgets/VoiceConfirmModal'
+import { useWebSocket } from './useWebSocket'
 
 const API = import.meta.env.VITE_API_URL
 
@@ -76,8 +78,10 @@ interface FinSettings {
 export default function App() {
   const [wallets, setWallets] = useState<WalletItem[]>([])
   const [selectedWallet, setSelectedWallet] = useState<WalletItem | null>(null)
+  const [showTransfer, setShowTransfer] = useState(false)
   const [voiceResult, setVoiceResult] = useState<VoiceResult | null>(null)
   const [showHistory, setShowHistory] = useState(false)
+  const [showExportMenu, setShowExportMenu] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [settings, setSettings] = useState<FinSettings | null>(null)
   const [settingsForm, setSettingsForm] = useState<FinSettings | null>(null)
@@ -87,6 +91,9 @@ export default function App() {
   const [footerText, setFooterText] = useState('')
   const [footerLoading, setFooterLoading] = useState(false)
   const bcRef = useRef<BroadcastChannel | null>(null)
+
+  // ── WebSocket — refresh temps réel depuis le backend ─────────────
+  useWebSocket(() => setRefreshKey(k => k + 1))
 
   // ── BroadcastChannel ─────────────────────────────────────────────
   useEffect(() => {
@@ -184,6 +191,53 @@ export default function App() {
 
       {/* Header */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', marginBottom:6, gap:6 }}>
+        <div style={{ position:'relative' }}>
+          <button onClick={() => setShowExportMenu(m => !m)} style={{
+            display:'flex', alignItems:'center', justifyContent:'center',
+            width:28, height:28,
+            background: showExportMenu ? 'rgba(167,139,250,0.15)' : 'rgba(255,255,255,0.06)',
+            border:`1px solid ${showExportMenu ? 'rgba(167,139,250,0.3)' : 'rgba(255,255,255,0.12)'}`,
+            borderRadius:9, cursor:'pointer',
+            color: showExportMenu ? '#a78bfa' : 'rgba(255,255,255,0.5)',
+          }} title="Exporter">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </button>
+          {showExportMenu && (
+            <div style={{
+              position:'absolute', top:34, right:0, zIndex:9999,
+              background:'rgba(20,20,28,0.98)', border:'1px solid rgba(255,255,255,0.12)',
+              borderRadius:10, padding:5, minWidth:110,
+              boxShadow:'0 8px 24px rgba(0,0,0,0.6)',
+              fontFamily:'-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif',
+            }}>
+              {[
+                { label:'📄 PDF', url:`${API}/finance/transactions/export/pdf` },
+                { label:'📊 CSV', url:`${API}/finance/transactions/export` },
+              ].map(({ label, url }) => (
+                <button key={url} onClick={() => {
+                  setShowExportMenu(false)
+                  const wk = (window as any).webkit?.messageHandlers?.download
+                  if (wk) wk.postMessage(url)
+                  else window.open(url, '_blank')
+                }} style={{
+                  display:'block', width:'100%', textAlign:'left',
+                  padding:'7px 10px', borderRadius:7, cursor:'pointer',
+                  background:'none', border:'none',
+                  color:'rgba(255,255,255,0.72)', fontSize:11, fontWeight:500,
+                  fontFamily:'inherit',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background='rgba(255,255,255,0.07)')}
+                onMouseLeave={e => (e.currentTarget.style.background='none')}
+                >{label}</button>
+              ))}
+            </div>
+          )}
+        </div>
         <button onClick={() => { setShowSettings(true); loadSettings() }} style={{
           display:'flex', alignItems:'center', justifyContent:'center',
           width:28, height:28,
@@ -221,6 +275,7 @@ export default function App() {
           refreshKey={refreshKey}
           onDataLoaded={(ws: WalletItem[]) => setWallets(ws)}
           onWalletClick={(w: WalletItem) => setSelectedWallet(w)}
+          onTransferClick={() => setShowTransfer(true)}
         />
         <TrendChart refreshKey={refreshKey} />
         <FixedChargesSection wallets={wallets} refreshKey={refreshKey} />
@@ -268,6 +323,12 @@ export default function App() {
         </div>
       </div>
 
+      {showTransfer && (
+        <TransferModal wallets={wallets}
+          onClose={() => setShowTransfer(false)}
+          onSuccess={() => { setShowTransfer(false); setRefreshKey(k => k + 1) }}
+        />
+      )}
       {selectedWallet !== null && (
         <WalletModal wallet={selectedWallet}
           onClose={() => setSelectedWallet(null)}

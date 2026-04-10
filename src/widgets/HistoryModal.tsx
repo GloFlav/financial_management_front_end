@@ -9,12 +9,32 @@ interface Transaction {
 const API = import.meta.env.VITE_API_URL
 const fmt = (n: number) => n.toLocaleString('fr-FR') + ' Ar'
 
+function exportCSV(txs: Transaction[]) {
+  const header = 'Date,Type,Catégorie,Description,Montant (Ar),Portefeuille'
+  const rows = txs.map(tx => [
+    new Date(tx.date).toLocaleDateString('fr-FR'),
+    tx.type === 'income' ? 'Revenu' : 'Dépense',
+    tx.category,
+    (tx.description ?? '').replace(/,/g, ' '),
+    tx.type === 'income' ? tx.amount : -tx.amount,
+    tx.wallet_name,
+  ].join(','))
+  const csv = [header, ...rows].join('\n')
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `transactions_${new Date().toISOString().slice(0,10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 export default function HistoryModal({ onClose }: { onClose: () => void }) {
   const [txs, setTxs] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch(`${API}/finance/transactions?limit=50`)
+    fetch(`${API}/finance/transactions?limit=200`)
       .then(r => r.json()).then(setTxs).catch(() => {})
       .finally(() => setLoading(false))
   }, [])
