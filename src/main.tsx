@@ -4,6 +4,7 @@ import './index.css'
 import App from './App'
 import IslandApp from './IslandApp'
 import ChatApp from './ChatApp'
+import SchedulerExpanded from './SchedulerExpanded'
 
 const hash = window.location.hash
 
@@ -12,6 +13,8 @@ if (hash === '#island') {
   Component = IslandApp
 } else if (hash === '#chat') {
   Component = ChatApp
+} else if (hash === '#scheduler-expanded') {
+  Component = SchedulerExpanded
 } else {
   Component = App
 }

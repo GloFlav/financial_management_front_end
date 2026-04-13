@@ -8,8 +8,14 @@ import TransferModal from './widgets/TransferModal'
 import HistoryModal from './widgets/HistoryModal'
 import VoiceConfirmModal from './widgets/VoiceConfirmModal'
 import { useWebSocket } from './useWebSocket'
+import ProScheduler from './widgets/ProScheduler'
+import AgendaSettingsModal from './widgets/AgendaSettingsModal'
+import { loadOccupations, saveOccupations, type Occupation } from './occupations'
 
 const API = import.meta.env.VITE_API_URL
+
+type Module = 'financial' | 'scheduler'
+const MODULES: Module[] = ['financial', 'scheduler']
 
 // ── Toast ────────────────────────────────────────────────────────────
 function Toast({ message, onDone }: { message: string; onDone: () => void }) {
@@ -83,14 +89,26 @@ export default function App() {
   const [showHistory, setShowHistory] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [settingsTab, setSettingsTab] = useState<'params'|'historique'>('params')
+  const [showAgendaSettings, setShowAgendaSettings] = useState(false)
+  const [agendaOccupations, setAgendaOccupations] = useState<Occupation[]>(loadOccupations)
+
+  const updateAgendaOccupations = (occs: Occupation[]) => {
+    setAgendaOccupations(occs)
+    saveOccupations(occs)
+  }
   const [settings, setSettings] = useState<FinSettings | null>(null)
   const [settingsForm, setSettingsForm] = useState<FinSettings | null>(null)
   const [settingsSaving, setSettingsSaving] = useState(false)
+  const [actionLogs, setActionLogs] = useState<any[]>([])
+  const [logsLoading, setLogsLoading] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [toast, setToast] = useState<string | null>(null)
   const [footerText, setFooterText] = useState('')
   const [footerLoading, setFooterLoading] = useState(false)
   const bcRef = useRef<BroadcastChannel | null>(null)
+  const [activeModule, setActiveModule] = useState<Module>('financial')
+  const moduleIdx = MODULES.indexOf(activeModule)
 
   // ── WebSocket — refresh temps réel depuis le backend ─────────────
   useWebSocket(() => setRefreshKey(k => k + 1))
@@ -114,6 +132,15 @@ export default function App() {
       .catch(() => {})
   }
   useEffect(loadSettings, [])
+
+  const loadLogs = () => {
+    setLogsLoading(true)
+    fetch(`${API}/finance/action-logs?limit=200`)
+      .then(r => r.json())
+      .then(d => setActionLogs(d))
+      .catch(() => {})
+      .finally(() => setLogsLoading(false))
+  }
 
   const saveSettings = async () => {
     if (!settingsForm) return
@@ -175,6 +202,8 @@ export default function App() {
   }, [footerLoading])
 
   const openChat = () => {
+    const persona = activeModule === 'scheduler' ? 'kiala' : 'zoki'
+    bcRef.current?.postMessage({ type: 'chat-persona', persona })
     bcRef.current?.postMessage({ type: 'show_chat' })
     try { ;(window as any).webkit?.messageHandlers?.chat?.postMessage?.('show') } catch {}
   }
@@ -190,7 +219,49 @@ export default function App() {
       <DragHandle />
 
       {/* Header */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', marginBottom:6, gap:6 }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
+        {/* Navigation modules */}
+        <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+          <button
+            onClick={() => moduleIdx > 0 && setActiveModule(MODULES[moduleIdx - 1])}
+            disabled={moduleIdx === 0}
+            style={{
+              width:22, height:22, borderRadius:7, padding:0, flexShrink:0,
+              display:'flex', alignItems:'center', justifyContent:'center',
+              background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)',
+              cursor: moduleIdx === 0 ? 'default' : 'pointer',
+              color: moduleIdx === 0 ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.6)',
+            }}
+          >
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+          </button>
+          <span style={{
+            fontSize:10, fontWeight:700, letterSpacing:'0.2px',
+            color:'rgba(255,255,255,0.6)', minWidth:68, textAlign:'center',
+            fontFamily:'-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif',
+          }}>
+            {activeModule === 'financial' ? 'Finances' : 'Agenda'}
+          </span>
+          <button
+            onClick={() => moduleIdx < MODULES.length - 1 && setActiveModule(MODULES[moduleIdx + 1])}
+            disabled={moduleIdx === MODULES.length - 1}
+            style={{
+              width:22, height:22, borderRadius:7, padding:0, flexShrink:0,
+              display:'flex', alignItems:'center', justifyContent:'center',
+              background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)',
+              cursor: moduleIdx === MODULES.length - 1 ? 'default' : 'pointer',
+              color: moduleIdx === MODULES.length - 1 ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.6)',
+            }}
+          >
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </button>
+        </div>
+        {/* Action buttons */}
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
         <div style={{ position:'relative' }}>
           <button onClick={() => setShowExportMenu(m => !m)} style={{
             display:'flex', alignItems:'center', justifyContent:'center',
@@ -238,15 +309,25 @@ export default function App() {
             </div>
           )}
         </div>
-        <button onClick={() => { setShowSettings(true); loadSettings() }} style={{
-          display:'flex', alignItems:'center', justifyContent:'center',
-          width:28, height:28,
-          background: showSettings ? 'rgba(167,139,250,0.15)' : 'rgba(255,255,255,0.06)',
-          border: `1px solid ${showSettings ? 'rgba(167,139,250,0.3)' : 'rgba(255,255,255,0.12)'}`,
-          borderRadius:9, cursor:'pointer',
-          color: showSettings ? '#a78bfa' : 'rgba(255,255,255,0.5)',
-          transition:'background 0.15s ease, border-color 0.15s ease, color 0.15s ease',
-        }} title="Paramètres financiers">
+        <button
+          onClick={() => {
+            if (activeModule === 'scheduler') {
+              setShowAgendaSettings(true)
+            } else {
+              setShowSettings(true); setSettingsTab('params'); loadSettings()
+            }
+          }}
+          style={{
+            display:'flex', alignItems:'center', justifyContent:'center',
+            width:28, height:28,
+            background: (showSettings||showAgendaSettings) ? 'rgba(167,139,250,0.15)' : 'rgba(255,255,255,0.06)',
+            border: `1px solid ${(showSettings||showAgendaSettings) ? 'rgba(167,139,250,0.3)' : 'rgba(255,255,255,0.12)'}`,
+            borderRadius:9, cursor:'pointer',
+            color: (showSettings||showAgendaSettings) ? '#a78bfa' : 'rgba(255,255,255,0.5)',
+            transition:'background 0.15s ease, border-color 0.15s ease, color 0.15s ease',
+          }}
+          title={activeModule === 'scheduler' ? 'Paramètres agenda' : 'Paramètres financiers'}
+        >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="3"/>
@@ -267,18 +348,24 @@ export default function App() {
           </svg>
           Chat
         </button>
-      </div>
+        </div>{/* /action buttons */}
+      </div>{/* /header */}
 
       {/* Content */}
       <div style={{ flex:1 }}>
-        <AccountWidget
-          refreshKey={refreshKey}
-          onDataLoaded={(ws: WalletItem[]) => setWallets(ws)}
-          onWalletClick={(w: WalletItem) => setSelectedWallet(w)}
-          onTransferClick={() => setShowTransfer(true)}
-        />
-        <TrendChart refreshKey={refreshKey} />
-        <FixedChargesSection wallets={wallets} refreshKey={refreshKey} />
+        {activeModule === 'financial' && (
+          <>
+            <AccountWidget
+              refreshKey={refreshKey}
+              onDataLoaded={(ws: WalletItem[]) => setWallets(ws)}
+              onWalletClick={(w: WalletItem) => setSelectedWallet(w)}
+              onTransferClick={() => setShowTransfer(true)}
+            />
+            <TrendChart refreshKey={refreshKey} />
+            <FixedChargesSection wallets={wallets} refreshKey={refreshKey} />
+          </>
+        )}
+        {activeModule === 'scheduler' && <ProScheduler />}
       </div>
 
       {/* Footer sticky — champ de saisie rapide */}
@@ -297,7 +384,7 @@ export default function App() {
             value={footerText}
             onChange={e => setFooterText(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && footerText.trim()) sendFooter(footerText) }}
-            placeholder={footerLoading ? 'Envoi…' : 'Demande quelque chose…'}
+            placeholder={footerLoading ? 'Envoi…' : activeModule === 'scheduler' ? 'Demande à Kiala…' : 'Demande quelque chose…'}
             disabled={footerLoading}
             style={{
               flex: 1, background: 'transparent', border: 'none', outline: 'none',
@@ -352,12 +439,28 @@ export default function App() {
         }} onClick={() => setShowSettings(false)}>
           <div style={{
             background:'rgba(18,18,28,0.97)', border:'1px solid rgba(255,255,255,0.1)',
-            borderRadius:18, padding:'20px 20px 16px', width:280, boxSizing:'border-box',
+            borderRadius:18, padding:'20px 20px 16px',
+            width: settingsTab === 'historique' ? 460 : 280, boxSizing:'border-box',
             boxShadow:'0 24px 64px rgba(0,0,0,0.7)',
             fontFamily:'-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif',
+            transition:'width 0.2s ease',
+            maxHeight:'85vh', display:'flex', flexDirection:'column',
           }} onClick={e => e.stopPropagation()}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
-              <div style={{ fontSize:13, fontWeight:700, color:'#fff' }}>Paramètres financiers</div>
+
+            {/* Header */}
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14, flexShrink:0 }}>
+              {/* Tabs */}
+              <div style={{ display:'flex', background:'rgba(255,255,255,0.05)', borderRadius:9, padding:3, gap:2 }}>
+                {(['params','historique'] as const).map(tab => (
+                  <button key={tab} onClick={() => { setSettingsTab(tab); if (tab==='historique') loadLogs() }} style={{
+                    padding:'4px 12px', borderRadius:7, border:'none', cursor:'pointer', fontSize:11, fontWeight:600,
+                    fontFamily:'-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif',
+                    background: settingsTab===tab ? 'rgba(255,255,255,0.1)' : 'transparent',
+                    color: settingsTab===tab ? '#fff' : 'rgba(255,255,255,0.4)',
+                    transition:'all 0.15s',
+                  }}>{tab === 'params' ? 'Paramètres' : 'Historique'}</button>
+                ))}
+              </div>
               <button onClick={() => setShowSettings(false)} style={{
                 width:22, height:22, borderRadius:6, border:'1px solid rgba(255,255,255,0.1)',
                 background:'rgba(255,255,255,0.05)', cursor:'pointer',
@@ -370,6 +473,8 @@ export default function App() {
               </button>
             </div>
 
+            {/* ── Tab : Paramètres ── */}
+            {settingsTab === 'params' && <>
             {/* Épargne actuelle (virtuelle dans compte bancaire) */}
             <div style={{ marginBottom:12 }}>
               <div style={{ fontSize:10, color:'#a78bfa', marginBottom:4, fontWeight:600, letterSpacing:'0.3px', textTransform:'uppercase' }}>Épargne actuelle</div>
@@ -451,8 +556,80 @@ export default function App() {
             }}>
               {settingsSaving ? 'Enregistrement…' : 'Enregistrer'}
             </button>
+            </>}
+
+            {/* ── Tab : Historique ── */}
+            {settingsTab === 'historique' && (
+              <div style={{ display:'flex', flexDirection:'column', flex:1, minHeight:0 }}>
+                {/* Export buttons */}
+                <div style={{ display:'flex', gap:8, marginBottom:12, flexShrink:0 }}>
+                  <a href={`${API}/finance/action-logs/export/csv`} download style={{ flex:1, textDecoration:'none' }}>
+                    <button style={{
+                      width:'100%', padding:'7px 0', borderRadius:9, border:'1px solid rgba(52,211,153,0.3)',
+                      background:'rgba(52,211,153,0.08)', color:'#34d399', fontSize:11, fontWeight:700, cursor:'pointer',
+                      fontFamily:'-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif',
+                    }}>↓ CSV</button>
+                  </a>
+                  <a href={`${API}/finance/action-logs/export/pdf`} download style={{ flex:1, textDecoration:'none' }}>
+                    <button style={{
+                      width:'100%', padding:'7px 0', borderRadius:9, border:'1px solid rgba(167,139,250,0.3)',
+                      background:'rgba(167,139,250,0.08)', color:'#a78bfa', fontSize:11, fontWeight:700, cursor:'pointer',
+                      fontFamily:'-apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif',
+                    }}>↓ PDF</button>
+                  </a>
+                  <button onClick={loadLogs} style={{
+                    width:32, padding:'7px 0', borderRadius:9, border:'1px solid rgba(255,255,255,0.1)',
+                    background:'rgba(255,255,255,0.05)', color:'rgba(255,255,255,0.4)', fontSize:13, cursor:'pointer',
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                  }}>↺</button>
+                </div>
+                {/* Log list */}
+                <div style={{ flex:1, overflowY:'auto', display:'flex', flexDirection:'column', gap:6, minHeight:0, maxHeight:460 }}>
+                  {logsLoading && <div style={{ fontSize:11, color:'rgba(255,255,255,0.3)', textAlign:'center', padding:'20px 0' }}>Chargement…</div>}
+                  {!logsLoading && actionLogs.length === 0 && (
+                    <div style={{ fontSize:11, color:'rgba(255,255,255,0.3)', textAlign:'center', padding:'20px 0' }}>Aucune action enregistrée</div>
+                  )}
+                  {actionLogs.map((log: any) => {
+                    const ts = log.timestamp ? new Date(log.timestamp).toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : ''
+                    const resultColor = log.result === 'auto' ? '#6ee7b7' : log.result === 'pending_confirm' ? '#fcd34d' : log.result === 'error' ? '#f87171' : 'rgba(255,255,255,0.3)'
+                    return (
+                      <div key={log.id} style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:10, padding:'9px 12px' }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5 }}>
+                          <span style={{ fontSize:9, color:'rgba(255,255,255,0.3)', flexShrink:0 }}>{ts}</span>
+                          <span style={{ fontSize:9, fontWeight:700, color:'rgba(110,231,183,0.7)', background:'rgba(110,231,183,0.08)', borderRadius:4, padding:'1px 6px', flexShrink:0 }}>{log.action_type || 'chat'}</span>
+                          <span style={{ fontSize:9, fontWeight:700, color:resultColor, marginLeft:'auto', flexShrink:0 }}>{log.result || ''}</span>
+                        </div>
+                        {log.prompt && (
+                          <div style={{ fontSize:10.5, color:'rgba(255,255,255,0.75)', marginBottom:4, lineHeight:1.5 }}>
+                            <span style={{ fontSize:9, color:'rgba(255,255,255,0.3)', marginRight:4 }}>▶</span>{log.prompt}
+                          </div>
+                        )}
+                        {log.ai_response && (
+                          <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', lineHeight:1.45 }}>
+                            <span style={{ fontSize:9, color:'rgba(110,231,183,0.5)', marginRight:4 }}>✦</span>{log.ai_response.slice(0, 180)}{log.ai_response.length > 180 ? '…' : ''}
+                          </div>
+                        )}
+                        {log.action_data && log.action_data !== 'null' && (
+                          <div style={{ marginTop:5, fontSize:9, color:'rgba(255,255,255,0.25)', fontFamily:'SF Mono, Monaco, monospace', background:'rgba(0,0,0,0.2)', borderRadius:6, padding:'4px 7px', overflowX:'auto' }}>
+                            {log.action_data.slice(0, 120)}{log.action_data.length > 120 ? '…' : ''}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
+      )}
+
+      {showAgendaSettings && (
+        <AgendaSettingsModal
+          occupations={agendaOccupations}
+          onUpdate={updateAgendaOccupations}
+          onClose={() => setShowAgendaSettings(false)}
+        />
       )}
     </div>
   )

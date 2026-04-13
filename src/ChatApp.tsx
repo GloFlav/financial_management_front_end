@@ -58,7 +58,8 @@ function ActionCard({ action, onConfirm, onDownload }: {
      || action.action === 'transfer' || action.action === 'create_wallet'
      || action.action === 'add_fixed_charge'
      || action.action === 'add_provisional_expense' || action.action === 'update_provisional_expense'
-     || action.action === 'delete_provisional_expense' || action.action === 'update_settings')
+     || action.action === 'delete_provisional_expense' || action.action === 'update_settings'
+     || action.action === 'patch_transaction')
 
   if (action.action === 'answer') return null
 
@@ -191,11 +192,20 @@ const SENSITIVE_ACTIONS = new Set([
   'update_settings', 'create_wallet', 'add_fixed_charge', 'transfer',
 ])
 
+const PERSONAS = {
+  zoki:  { name: 'Zoky Kiontabla',     sub: 'gestionnaire de compte' },
+  kiala: { name: 'Kiala Saika Retera', sub: 'assistante agenda'      },
+} as const
+type Persona = keyof typeof PERSONAS
+
 export default function ChatApp() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [visible, setVisible] = useState(false)
+  const [persona, setPersona] = useState<Persona>(
+    () => (localStorage.getItem('mylife-chat-persona') as Persona) || 'zoki'
+  )
   const [showHistory, setShowHistory] = useState(false)
   const [conversations, setConversations] = useState<SavedConversation[]>(loadConversations)
   const [passwordPending, setPasswordPending] = useState<ChatMessage | null>(null)
@@ -243,6 +253,10 @@ export default function ChatApp() {
     const bc = new BroadcastChannel('mylife')
     bcRef.current = bc
     bc.onmessage = (e) => {
+      if (e.data?.type === 'chat-persona' && (e.data.persona === 'zoki' || e.data.persona === 'kiala')) {
+        setPersona(e.data.persona)
+        localStorage.setItem('mylife-chat-persona', e.data.persona)
+      }
       if (e.data?.type === 'show_chat') {
         showChatWindow()
       }
@@ -405,6 +419,7 @@ export default function ChatApp() {
           if (!r.ok) throw new Error(`HTTP ${r.status}`)
         } else {
           const endpoint = confirmEndpoint || endpointMap[action]
+          const method: string = (msg.action as any).confirm_method || 'POST'
           if (endpoint) {
             // Si le LLM a retourné un tableau (plusieurs items d'un coup), on itère
             const items: any[] = Array.isArray(msg.action.data)
@@ -412,7 +427,7 @@ export default function ChatApp() {
               : [msg.action.data]
             for (const item of items) {
               const r = await fetch(`${API}${endpoint}`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                method, headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(item),
               })
               if (!r.ok) {
@@ -434,6 +449,8 @@ export default function ChatApp() {
         ? 'Dépense prévisionnelle enregistrée.'
         : action === 'update_settings'
         ? 'Paramètres mis à jour.'
+        : action === 'patch_transaction'
+        ? 'Transaction corrigée.'
         : 'Opération enregistrée.'
       setMessages(prev => [...prev, { role: 'assistant', content: confirmMsg, timestamp: Date.now() }])
     } catch (e: any) {
@@ -475,10 +492,10 @@ export default function ChatApp() {
       } as CSSProperties}>
         <div style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', letterSpacing: '-0.2px' }}>
-            Zoky kiontabla
+            {PERSONAS[persona].name}
           </div>
           <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 1 }}>
-            gestionnaire de compte
+            {PERSONAS[persona].sub}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, WebkitAppRegion: 'no-drag' } as CSSProperties}>
