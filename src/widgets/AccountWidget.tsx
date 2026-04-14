@@ -159,24 +159,33 @@ export default function AccountWidget({ onDataLoaded, onWalletClick, onTransferC
       ) : !data ? (
         <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 13, padding: '8px 0' }}>Chargement…</p>
       ) : <>
-        {/* Solde utilisable — chiffre principal */}
-        <div style={css.balanceSection}>
-          <div style={css.balanceLabel}>{hasSavings ? 'Disponible (hors épargne)' : 'Solde total'}</div>
-          <div style={{ ...css.balance, color: usable >= 0 ? '#6ee7b7' : '#fca5a5' }}>
-            {fmt(usable)}
-          </div>
-          {hasSavings && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>
-                Total <span style={{ color: 'rgba(255,255,255,0.55)', fontWeight: 600 }}>{fmt(data.balance)}</span>
+        {/* Solde utilisable + Épargne — affichage côte à côte si épargne active */}
+        {hasSavings ? (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 9, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.28)', marginBottom: 3 }}>Disponible</div>
+                <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.5px', lineHeight: 1.1, color: usable >= 0 ? '#6ee7b7' : '#fca5a5' }}>
+                  {fmt(usable)}
+                </div>
               </div>
-              <div style={{ fontSize: 10, color: 'rgba(167,139,250,0.5)' }}>·</div>
-              <div style={{ fontSize: 10, color: 'rgba(167,139,250,0.7)' }}>
-                Épargne <span style={{ color: '#a78bfa', fontWeight: 600 }}>{fmt(savings)}</span>
+              <div>
+                <div style={{ fontSize: 9, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'rgba(167,139,250,0.6)', marginBottom: 3 }}>Épargne</div>
+                <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.5px', lineHeight: 1.1, color: '#a78bfa' }}>
+                  {fmt(savings)}
+                </div>
               </div>
             </div>
-          )}
-        </div>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.22)', marginTop: 5 }}>
+              Total <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>{fmt(data.balance)}</span>
+            </div>
+          </div>
+        ) : (
+          <div style={css.balanceSection}>
+            <div style={css.balanceLabel}>Solde total</div>
+            <div style={{ ...css.balance, color: '#6ee7b7' }}>{fmt(usable)}</div>
+          </div>
+        )}
 
         <div style={css.statsRow}>
           {[

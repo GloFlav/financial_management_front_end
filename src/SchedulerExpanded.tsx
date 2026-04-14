@@ -702,7 +702,7 @@ export default function SchedulerExpanded() {
 
       {/* ── Ligne 2 : Header nav (identique layout header App.tsx) ── */}
       <div style={{
-        position:'relative', zIndex:1,
+        position:'relative', zIndex:10,
         display:'flex', alignItems:'center', justifyContent:'space-between',
         marginBottom:10, flexShrink:0,
       }}>
